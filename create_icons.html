@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<body>
+<canvas id="canvas192" width="192" height="192"></canvas>
+<canvas id="canvas512" width="512" height="512"></canvas>
+<script>
+function createIcon(canvas, size) {
+    const ctx = canvas.getContext('2d');
+    
+    // Gradient background
+    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    gradient.addColorStop(0, '#667eea');
+    gradient.addColorStop(1, '#764ba2');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    
+    // Microphone icon
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(size/2, size/2.5, size/8, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillRect(size/2 - size/16, size/2.5, size/8, size/6);
+    
+    ctx.beginPath();
+    ctx.arc(size/2, size/1.5, size/6, 0.5*Math.PI, 1.5*Math.PI, true);
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = size/20;
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(size/2, size/1.5);
+    ctx.lineTo(size/2, size*0.8);
+    ctx.stroke();
+    
+    ctx.fillRect(size/2 - size/8, size*0.8, size/4, size/40);
+}
+
+createIcon(document.getElementById('canvas192'), 192);
+createIcon(document.getElementById('canvas512'), 512);
+
+// Download images
+setTimeout(() => {
+    document.getElementById('canvas192').toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'icon-192.png';
+        a.click();
+    });
+    
+    setTimeout(() => {
+        document.getElementById('canvas512').toBlob(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'icon-512.png';
+            a.click();
+        });
+    }, 1000);
+}, 500);
+</script>
+</body>
+</html>
