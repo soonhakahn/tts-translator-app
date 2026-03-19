@@ -12,7 +12,7 @@ function saveHistory(type, text, translation = null, lang = null) {
     };
     
     history.unshift(item);
-    if (history.length > 50) history = history.slice(0, 50); // Keep last 50
+    if (history.length > 50) history = history.slice(0, 50);
     localStorage.setItem('ttsHistory', JSON.stringify(history));
     renderHistory();
 }
@@ -35,7 +35,6 @@ function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
         alert('클립보드에 복사되었습니다!');
     }).catch(() => {
-        // Fallback for older browsers
         const textarea = document.createElement('textarea');
         textarea.value = text;
         document.body.appendChild(textarea);
@@ -75,7 +74,7 @@ function renderHistory() {
                 ${item.translation ? `<div class="history-translation">→ ${item.translation}</div>` : ''}
             </div>
             <div class="history-actions">
-                <button class="history-btn" onclick="copyToClipboard(\`${item.text.replace(/`/g, '\\`')}\`)">
+                <button class="history-btn" onclick="copyToClipboard(\`${item.text.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
                     <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/>
                         <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/>
@@ -83,7 +82,7 @@ function renderHistory() {
                     복사
                 </button>
                 ${item.translation ? `
-                <button class="history-btn" onclick="copyToClipboard(\`${item.translation.replace(/`/g, '\\`')}\`)">
+                <button class="history-btn" onclick="copyToClipboard(\`${item.translation.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
                     <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/>
                         <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/>
@@ -102,7 +101,6 @@ function renderHistory() {
     `).join('');
 }
 
-// Clear all history button
 document.getElementById('clearAllBtn').addEventListener('click', clearAllHistory);
 
 // Tab switching
@@ -119,19 +117,18 @@ tabs.forEach(tab => {
         tab.classList.add('active');
         document.getElementById(tabName).classList.add('active');
         
-        // Render history when switching to history tab
         if (tabName === 'history') {
             renderHistory();
         }
     });
 });
 
-// Speech synthesis
+// Speech synthesis variables
+let synth = window.speechSynthesis;
 let currentUtterance = null;
-let currentFullText = '';
-let currentSentences = [];
-let currentSentenceIndex = 0;
-let isReading = false;
+let fullText = '';
+let currentCharIndex = 0;
+let isPaused = false;
 
 // Speed control
 const speedRate = document.getElementById('speedRate');
@@ -156,93 +153,73 @@ const textInput = document.getElementById('textInput');
 const voiceLang = document.getElementById('voiceLang');
 const status = document.getElementById('status');
 
-function splitIntoChunks(text, maxLength = 200) {
-    // Split by sentences first
-    const sentences = text.match(/[^.!?。！？]+[.!?。！？]+/g) || [text];
-    const chunks = [];
-    let currentChunk = '';
-    
-    sentences.forEach(sentence => {
-        if ((currentChunk + sentence).length > maxLength && currentChunk) {
-            chunks.push(currentChunk.trim());
-            currentChunk = sentence;
-        } else {
-            currentChunk += sentence;
-        }
-    });
-    
-    if (currentChunk) {
-        chunks.push(currentChunk.trim());
+function speakText(text, startFrom = 0) {
+    if (!synth) {
+        showStatus('음성 합성을 지원하지 않는 브라우저입니다.', 'error');
+        return;
     }
-    
-    return chunks;
-}
 
-function speakFromIndex(index) {
-    if (index >= currentSentences.length) {
+    synth.cancel();
+    
+    const textToSpeak = text.substring(startFrom);
+    if (!textToSpeak.trim()) {
+        showStatus('읽을 내용이 없습니다.', 'error');
+        return;
+    }
+
+    currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
+    currentUtterance.lang = voiceLang.value;
+    currentUtterance.rate = parseFloat(speedRate.value);
+    
+    currentUtterance.onstart = () => {
+        readBtn.style.display = 'none';
+        resumeBtn.style.display = 'none';
+        restartBtn.style.display = 'none';
+        stopBtn.style.display = 'flex';
+        isPaused = false;
+        showStatus('읽는 중...', 'info');
+    };
+    
+    currentUtterance.onend = () => {
+        if (!isPaused) {
+            readBtn.style.display = 'flex';
+            resumeBtn.style.display = 'none';
+            restartBtn.style.display = 'none';
+            stopBtn.style.display = 'none';
+            currentCharIndex = 0;
+            showStatus('읽기 완료!', 'success');
+        }
+    };
+    
+    currentUtterance.onboundary = (event) => {
+        if (event.name === 'word' || event.name === 'sentence') {
+            currentCharIndex = startFrom + event.charIndex;
+        }
+    };
+    
+    currentUtterance.onerror = (e) => {
+        console.error('TTS error:', e);
         readBtn.style.display = 'flex';
         resumeBtn.style.display = 'none';
         restartBtn.style.display = 'none';
         stopBtn.style.display = 'none';
-        isReading = false;
-        currentSentenceIndex = 0;
-        showStatus('읽기 완료!', 'success');
-        return;
-    }
-
-    currentSentenceIndex = index;
-    const chunk = currentSentences[index];
-
-    window.speechSynthesis.cancel();
-    currentUtterance = new SpeechSynthesisUtterance(chunk);
-    currentUtterance.lang = voiceLang.value;
-    currentUtterance.rate = parseFloat(speedRate.value);
-
-    currentUtterance.onend = () => {
-        if (isReading) {
-            speakFromIndex(index + 1);
-        }
+        showStatus('오류 발생: ' + e.error, 'error');
     };
-
-    currentUtterance.onerror = (e) => {
-        console.error('Speech error:', e);
-        if (isReading && e.error !== 'interrupted') {
-            // Try next chunk on error
-            speakFromIndex(index + 1);
-        }
-    };
-
-    window.speechSynthesis.speak(currentUtterance);
-}
-
-function startReading(text, lang, rate, fromIndex = 0) {
-    if (!('speechSynthesis' in window)) {
-        showStatus('이 브라우저는 음성 합성을 지원하지 않습니다.', 'error');
-        return;
-    }
-
-    currentFullText = text;
-    currentSentences = splitIntoChunks(text);
-    isReading = true;
-
-    readBtn.style.display = 'none';
-    resumeBtn.style.display = 'none';
-    restartBtn.style.display = 'none';
-    stopBtn.style.display = 'flex';
-    showStatus(`읽는 중... (${fromIndex + 1}/${currentSentences.length})`, 'info');
-
-    speakFromIndex(fromIndex);
+    
+    synth.speak(currentUtterance);
 }
 
 readBtn.addEventListener('click', () => {
     let text = textInput.value.trim();
     
-    // Check if there's selected text
-    const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
+    // Check for selected text
+    const selection = textInput.value.substring(
+        textInput.selectionStart,
+        textInput.selectionEnd
+    );
     
-    if (selectedText && textInput.contains(selection.anchorNode)) {
-        text = selectedText;
+    if (selection) {
+        text = selection;
         showStatus('선택한 부분을 읽습니다.', 'info');
     }
     
@@ -250,38 +227,34 @@ readBtn.addEventListener('click', () => {
         showStatus('텍스트를 입력하거나 선택해주세요.', 'error');
         return;
     }
-
-    startReading(text, voiceLang.value, parseFloat(speedRate.value), 0);
-    // Save to history
+    
+    fullText = text;
+    currentCharIndex = 0;
+    speakText(text, 0);
     saveHistory('read', text, null, voiceLang.value);
 });
 
 resumeBtn.addEventListener('click', () => {
-    if (currentFullText && currentSentences.length > 0) {
-        isReading = true;
-        readBtn.style.display = 'none';
-        resumeBtn.style.display = 'none';
-        restartBtn.style.display = 'none';
-        stopBtn.style.display = 'flex';
-        showStatus(`이어서 읽기... (${currentSentenceIndex + 1}/${currentSentences.length})`, 'info');
-        speakFromIndex(currentSentenceIndex);
+    if (fullText) {
+        speakText(fullText, currentCharIndex);
     }
 });
 
 restartBtn.addEventListener('click', () => {
-    if (currentFullText) {
-        startReading(currentFullText, voiceLang.value, parseFloat(speedRate.value), 0);
+    if (fullText) {
+        currentCharIndex = 0;
+        speakText(fullText, 0);
     }
 });
 
 stopBtn.addEventListener('click', () => {
-    window.speechSynthesis.cancel();
-    isReading = false;
+    isPaused = true;
+    synth.cancel();
     readBtn.style.display = 'none';
     resumeBtn.style.display = 'flex';
     restartBtn.style.display = 'flex';
     stopBtn.style.display = 'none';
-    showStatus(`정지되었습니다. (${currentSentenceIndex + 1}/${currentSentences.length} 위치)`, 'info');
+    showStatus('정지됨 - 이어서 읽기 또는 처음부터 선택', 'info');
 });
 
 // Tab 2: Translate
@@ -306,7 +279,6 @@ translateBtn.addEventListener('click', async () => {
         const translated = await translateText(text, sourceLang.value, targetLang.value);
         translateOutput.innerHTML = makeClickableWords(translated);
         showTranslateStatus('번역 완료!', 'success');
-        // Save to history
         saveHistory('translate', text, translated);
     } catch (error) {
         showTranslateStatus('번역 실패: ' + error.message, 'error');
@@ -326,64 +298,64 @@ const trTargetLang = document.getElementById('trTargetLang');
 const trOutput = document.getElementById('trOutput');
 const trStatus = document.getElementById('trStatus');
 
-let trCurrentFullText = '';
-let trCurrentSentences = [];
-let trCurrentSentenceIndex = 0;
-let trIsReading = false;
+let trFullText = '';
+let trCurrentCharIndex = 0;
+let trIsPaused = false;
 
-function trSpeakFromIndex(index) {
-    if (index >= trCurrentSentences.length) {
+function speakTranslatedText(text, startFrom = 0) {
+    if (!synth) {
+        showTrStatus('음성 합성을 지원하지 않는 브라우저입니다.', 'error');
+        return;
+    }
+
+    synth.cancel();
+    
+    const textToSpeak = text.substring(startFrom);
+    if (!textToSpeak.trim()) {
+        showTrStatus('읽을 내용이 없습니다.', 'error');
+        return;
+    }
+
+    currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
+    currentUtterance.lang = trTargetLang.value;
+    currentUtterance.rate = parseFloat(trSpeedRate.value);
+    
+    currentUtterance.onstart = () => {
+        trBtn.style.display = 'none';
+        trResumeBtn.style.display = 'none';
+        trRestartBtn.style.display = 'none';
+        trStopBtn.style.display = 'flex';
+        trIsPaused = false;
+        showTrStatus('읽는 중...', 'info');
+    };
+    
+    currentUtterance.onend = () => {
+        if (!trIsPaused) {
+            trBtn.style.display = 'flex';
+            trResumeBtn.style.display = 'none';
+            trRestartBtn.style.display = 'none';
+            trStopBtn.style.display = 'none';
+            trCurrentCharIndex = 0;
+            showTrStatus('읽기 완료!', 'success');
+        }
+    };
+    
+    currentUtterance.onboundary = (event) => {
+        if (event.name === 'word' || event.name === 'sentence') {
+            trCurrentCharIndex = startFrom + event.charIndex;
+        }
+    };
+    
+    currentUtterance.onerror = (e) => {
+        console.error('TTS error:', e);
         trBtn.style.display = 'flex';
         trResumeBtn.style.display = 'none';
         trRestartBtn.style.display = 'none';
         trStopBtn.style.display = 'none';
-        trIsReading = false;
-        trCurrentSentenceIndex = 0;
-        showTrStatus('읽기 완료!', 'success');
-        return;
-    }
-
-    trCurrentSentenceIndex = index;
-    const chunk = trCurrentSentences[index];
-
-    window.speechSynthesis.cancel();
-    currentUtterance = new SpeechSynthesisUtterance(chunk);
-    currentUtterance.lang = trTargetLang.value;
-    currentUtterance.rate = parseFloat(trSpeedRate.value);
-
-    currentUtterance.onend = () => {
-        if (trIsReading) {
-            trSpeakFromIndex(index + 1);
-        }
+        showTrStatus('오류 발생: ' + e.error, 'error');
     };
-
-    currentUtterance.onerror = (e) => {
-        console.error('Speech error:', e);
-        if (trIsReading && e.error !== 'interrupted') {
-            trSpeakFromIndex(index + 1);
-        }
-    };
-
-    window.speechSynthesis.speak(currentUtterance);
-}
-
-function trStartReading(text, lang, rate, fromIndex = 0) {
-    if (!('speechSynthesis' in window)) {
-        showTrStatus('이 브라우저는 음성 합성을 지원하지 않습니다.', 'error');
-        return;
-    }
-
-    trCurrentFullText = text;
-    trCurrentSentences = splitIntoChunks(text);
-    trIsReading = true;
-
-    trBtn.style.display = 'none';
-    trResumeBtn.style.display = 'none';
-    trRestartBtn.style.display = 'none';
-    trStopBtn.style.display = 'flex';
-    showTrStatus(`읽는 중... (${fromIndex + 1}/${trCurrentSentences.length})`, 'info');
-
-    trSpeakFromIndex(fromIndex);
+    
+    synth.speak(currentUtterance);
 }
 
 trBtn.addEventListener('click', async () => {
@@ -399,12 +371,11 @@ trBtn.addEventListener('click', async () => {
     try {
         const translated = await translateText(text, trSourceLang.value, trTargetLang.value);
         trOutput.innerHTML = makeClickableWords(translated);
-        
-        // Save to history
         saveHistory('translate-read', text, translated, trTargetLang.value);
-
-        // Read the translated text
-        trStartReading(translated, trTargetLang.value, parseFloat(trSpeedRate.value), 0);
+        
+        trFullText = translated;
+        trCurrentCharIndex = 0;
+        speakTranslatedText(translated, 0);
         trBtn.disabled = false;
     } catch (error) {
         showTrStatus('번역 실패: ' + error.message, 'error');
@@ -413,37 +384,32 @@ trBtn.addEventListener('click', async () => {
 });
 
 trResumeBtn.addEventListener('click', () => {
-    if (trCurrentFullText && trCurrentSentences.length > 0) {
-        trIsReading = true;
-        trBtn.style.display = 'none';
-        trResumeBtn.style.display = 'none';
-        trRestartBtn.style.display = 'none';
-        trStopBtn.style.display = 'flex';
-        showTrStatus(`이어서 읽기... (${trCurrentSentenceIndex + 1}/${trCurrentSentences.length})`, 'info');
-        trSpeakFromIndex(trCurrentSentenceIndex);
+    if (trFullText) {
+        speakTranslatedText(trFullText, trCurrentCharIndex);
     }
 });
 
 trRestartBtn.addEventListener('click', () => {
-    if (trCurrentFullText) {
-        trStartReading(trCurrentFullText, trTargetLang.value, parseFloat(trSpeedRate.value), 0);
+    if (trFullText) {
+        trCurrentCharIndex = 0;
+        speakTranslatedText(trFullText, 0);
     }
 });
 
 trStopBtn.addEventListener('click', () => {
-    window.speechSynthesis.cancel();
-    trIsReading = false;
+    trIsPaused = true;
+    synth.cancel();
     trBtn.style.display = 'none';
     trResumeBtn.style.display = 'flex';
     trRestartBtn.style.display = 'flex';
     trStopBtn.style.display = 'none';
-    showTrStatus(`정지되었습니다. (${trCurrentSentenceIndex + 1}/${trCurrentSentences.length} 위치)`, 'info');
+    showTrStatus('정지됨 - 이어서 읽기 또는 처음부터 선택', 'info');
 });
 
-// Translation API (using MyMemory free API)
+// Translation API
 async function translateText(text, from, to) {
     const fromLang = from === 'auto' ? '' : from;
-    const toLang = to.split('-')[0]; // Convert 'en-US' to 'en'
+    const toLang = to.split('-')[0];
     
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
     
@@ -484,12 +450,10 @@ async function showDictionary(word, rect) {
     tooltip.textContent = '검색 중...';
     tooltip.classList.add('show');
     
-    // Position tooltip
     tooltip.style.left = rect.left + 'px';
     tooltip.style.top = (rect.bottom + 5) + 'px';
 
     try {
-        // Try to translate the word to Korean
         const translation = await translateText(word, 'auto', 'ko');
         tooltip.innerHTML = `<strong>${word}</strong><br>${translation}`;
     } catch (error) {
@@ -518,19 +482,19 @@ function showTrStatus(message, type) {
     trStatus.className = 'status ' + type;
 }
 
-// PWA Service Worker registration
+// PWA Service Worker
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
         .then(reg => console.log('Service Worker registered'))
         .catch(err => console.log('Service Worker registration failed'));
 }
 
-// iOS standalone mode detection
+// iOS standalone mode
 if (window.navigator.standalone) {
     document.body.style.paddingTop = '20px';
 }
 
-// Initialize history on page load
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
     renderHistory();
 });
