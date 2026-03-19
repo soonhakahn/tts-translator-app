@@ -242,6 +242,112 @@
             color: #667eea;
         }
 
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .history-item {
+            background: white;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            padding: 15px;
+            transition: all 0.3s;
+        }
+
+        .history-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .history-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .history-type.read {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .history-type.translate {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .history-type.translate-read {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .history-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .history-content {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .history-translation {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #ddd;
+            color: #555;
+        }
+
+        .history-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .history-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            background: white;
+            color: #667eea;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .history-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .history-btn.delete {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+
+        .history-btn.delete:hover {
+            background: #dc3545;
+            color: white;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 20px;
@@ -257,6 +363,16 @@
 
             select, button {
                 width: 100%;
+            }
+
+            .tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .tab {
+                min-width: 80px;
+                font-size: 13px;
             }
         }
 
@@ -275,6 +391,7 @@
             <button class="tab active" data-tab="read">📖 원문 읽기</button>
             <button class="tab" data-tab="translate">🌐 번역하기</button>
             <button class="tab" data-tab="translate-read">🔊 번역 후 읽기</button>
+            <button class="tab" data-tab="history">📜 히스토리</button>
         </div>
 
         <!-- Tab 1: 원문 읽기 -->
@@ -397,6 +514,23 @@
 
             <div id="trStatus" class="status"></div>
             <div id="trOutput" class="output selectable"></div>
+        </div>
+
+        <!-- Tab 4: History -->
+        <div class="tab-content" id="history">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0; color: #667eea; font-size: 20px;">사용 기록</h2>
+                <button id="clearAllBtn" style="background: #dc3545; padding: 8px 16px; font-size: 13px;">
+                    <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    전체 삭제
+                </button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+            <div id="emptyHistory" class="empty-message" style="display: none;">
+                <p style="text-align: center; color: #999; padding: 40px;">아직 사용 기록이 없습니다.</p>
+            </div>
         </div>
     </div>
 

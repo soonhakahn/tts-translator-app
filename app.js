@@ -1,3 +1,110 @@
+// History management
+let history = JSON.parse(localStorage.getItem('ttsHistory') || '[]');
+
+function saveHistory(type, text, translation = null, lang = null) {
+    const item = {
+        id: Date.now(),
+        type,
+        text,
+        translation,
+        lang,
+        timestamp: new Date().toLocaleString('ko-KR')
+    };
+    
+    history.unshift(item);
+    if (history.length > 50) history = history.slice(0, 50); // Keep last 50
+    localStorage.setItem('ttsHistory', JSON.stringify(history));
+    renderHistory();
+}
+
+function deleteHistoryItem(id) {
+    history = history.filter(item => item.id !== id);
+    localStorage.setItem('ttsHistory', JSON.stringify(history));
+    renderHistory();
+}
+
+function clearAllHistory() {
+    if (confirm('모든 히스토리를 삭제하시겠습니까?')) {
+        history = [];
+        localStorage.setItem('ttsHistory', JSON.stringify(history));
+        renderHistory();
+    }
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert('클립보드에 복사되었습니다!');
+    }).catch(() => {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('클립보드에 복사되었습니다!');
+    });
+}
+
+function renderHistory() {
+    const historyList = document.getElementById('historyList');
+    const emptyHistory = document.getElementById('emptyHistory');
+    
+    if (history.length === 0) {
+        historyList.innerHTML = '';
+        emptyHistory.style.display = 'block';
+        return;
+    }
+    
+    emptyHistory.style.display = 'none';
+    
+    const typeNames = {
+        'read': '📖 원문 읽기',
+        'translate': '🌐 번역하기',
+        'translate-read': '🔊 번역 후 읽기'
+    };
+    
+    historyList.innerHTML = history.map(item => `
+        <div class="history-item">
+            <div class="history-header">
+                <span class="history-type ${item.type}">${typeNames[item.type] || item.type}</span>
+                <span class="history-time">${item.timestamp}</span>
+            </div>
+            <div class="history-content">
+                <div>${item.text}</div>
+                ${item.translation ? `<div class="history-translation">→ ${item.translation}</div>` : ''}
+            </div>
+            <div class="history-actions">
+                <button class="history-btn" onclick="copyToClipboard(\`${item.text.replace(/`/g, '\\`')}\`)">
+                    <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/>
+                        <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/>
+                    </svg>
+                    복사
+                </button>
+                ${item.translation ? `
+                <button class="history-btn" onclick="copyToClipboard(\`${item.translation.replace(/`/g, '\\`')}\`)">
+                    <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/>
+                        <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/>
+                    </svg>
+                    번역 복사
+                </button>
+                ` : ''}
+                <button class="history-btn delete" onclick="deleteHistoryItem(${item.id})">
+                    <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    삭제
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Clear all history button
+document.getElementById('clearAllBtn').addEventListener('click', clearAllHistory);
+
 // Tab switching
 const tabs = document.querySelectorAll('.tab');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -11,6 +118,11 @@ tabs.forEach(tab => {
         
         tab.classList.add('active');
         document.getElementById(tabName).classList.add('active');
+        
+        // Render history when switching to history tab
+        if (tabName === 'history') {
+            renderHistory();
+        }
     });
 });
 
@@ -57,6 +169,8 @@ readBtn.addEventListener('click', () => {
             readBtn.style.display = 'none';
             stopBtn.style.display = 'flex';
             showStatus('읽는 중...', 'info');
+            // Save to history
+            saveHistory('read', text, null, voiceLang.value);
         };
 
         currentUtterance.onend = () => {
@@ -106,6 +220,8 @@ translateBtn.addEventListener('click', async () => {
         const translated = await translateText(text, sourceLang.value, targetLang.value);
         translateOutput.innerHTML = makeClickableWords(translated);
         showTranslateStatus('번역 완료!', 'success');
+        // Save to history
+        saveHistory('translate', text, translated);
     } catch (error) {
         showTranslateStatus('번역 실패: ' + error.message, 'error');
     } finally {
@@ -136,6 +252,9 @@ trBtn.addEventListener('click', async () => {
         const translated = await translateText(text, trSourceLang.value, trTargetLang.value);
         trOutput.innerHTML = makeClickableWords(translated);
         showTrStatus('번역 완료! 읽는 중...', 'info');
+        
+        // Save to history
+        saveHistory('translate-read', text, translated, trTargetLang.value);
 
         // Read the translated text
         window.speechSynthesis.cancel();
@@ -264,3 +383,8 @@ if ('serviceWorker' in navigator) {
 if (window.navigator.standalone) {
     document.body.style.paddingTop = '20px';
 }
+
+// Initialize history on page load
+document.addEventListener('DOMContentLoaded', () => {
+    renderHistory();
+});
