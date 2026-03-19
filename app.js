@@ -128,9 +128,10 @@ tabs.forEach(tab => {
 
 // Speech synthesis
 let currentUtterance = null;
-let currentText = '';
-let currentPosition = 0;
-let isPaused = false;
+let currentFullText = '';
+let currentSentences = [];
+let currentSentenceIndex = 0;
+let isReading = false;
 
 // Speed control
 const speedRate = document.getElementById('speedRate');
@@ -155,102 +156,132 @@ const textInput = document.getElementById('textInput');
 const voiceLang = document.getElementById('voiceLang');
 const status = document.getElementById('status');
 
-function speakText(text, lang, rate, fromPosition = 0) {
-    if (!('speechSynthesis' in window)) {
-        showStatus('이 브라우저는 음성 합성을 지원하지 않습니다.', 'error');
+function splitIntoChunks(text, maxLength = 200) {
+    // Split by sentences first
+    const sentences = text.match(/[^.!?。！？]+[.!?。！？]+/g) || [text];
+    const chunks = [];
+    let currentChunk = '';
+    
+    sentences.forEach(sentence => {
+        if ((currentChunk + sentence).length > maxLength && currentChunk) {
+            chunks.push(currentChunk.trim());
+            currentChunk = sentence;
+        } else {
+            currentChunk += sentence;
+        }
+    });
+    
+    if (currentChunk) {
+        chunks.push(currentChunk.trim());
+    }
+    
+    return chunks;
+}
+
+function speakFromIndex(index) {
+    if (index >= currentSentences.length) {
+        readBtn.style.display = 'flex';
+        resumeBtn.style.display = 'none';
+        restartBtn.style.display = 'none';
+        stopBtn.style.display = 'none';
+        isReading = false;
+        currentSentenceIndex = 0;
+        showStatus('읽기 완료!', 'success');
         return;
     }
 
-    // Stop any ongoing speech
+    currentSentenceIndex = index;
+    const chunk = currentSentences[index];
+
     window.speechSynthesis.cancel();
+    currentUtterance = new SpeechSynthesisUtterance(chunk);
+    currentUtterance.lang = voiceLang.value;
+    currentUtterance.rate = parseFloat(speedRate.value);
 
-    // Split text into sentences for better position tracking
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-    const textToSpeak = sentences.slice(fromPosition).join(' ');
-
-    if (!textToSpeak.trim()) {
-        showStatus('읽을 내용이 없습니다.', 'error');
-        return;
-    }
-
-    currentText = text;
-    currentPosition = fromPosition;
-    isPaused = false;
-
-    currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
-    currentUtterance.lang = lang;
-    currentUtterance.rate = rate;
-
-    let sentenceIndex = fromPosition;
-    currentUtterance.onboundary = (event) => {
-        if (event.name === 'sentence') {
-            sentenceIndex++;
-            currentPosition = sentenceIndex;
+    currentUtterance.onend = () => {
+        if (isReading) {
+            speakFromIndex(index + 1);
         }
     };
 
-    currentUtterance.onstart = () => {
-        readBtn.style.display = 'none';
-        resumeBtn.style.display = 'none';
-        restartBtn.style.display = 'none';
-        stopBtn.style.display = 'flex';
-        showStatus('읽는 중...', 'info');
-    };
-
-    currentUtterance.onend = () => {
-        readBtn.style.display = 'flex';
-        resumeBtn.style.display = 'none';
-        restartBtn.style.display = 'none';
-        stopBtn.style.display = 'none';
-        currentPosition = 0;
-        showStatus('읽기 완료!', 'success');
-    };
-
     currentUtterance.onerror = (e) => {
-        readBtn.style.display = 'flex';
-        resumeBtn.style.display = 'none';
-        restartBtn.style.display = 'none';
-        stopBtn.style.display = 'none';
-        showStatus('오류가 발생했습니다: ' + e.error, 'error');
+        console.error('Speech error:', e);
+        if (isReading && e.error !== 'interrupted') {
+            // Try next chunk on error
+            speakFromIndex(index + 1);
+        }
     };
 
     window.speechSynthesis.speak(currentUtterance);
 }
 
-readBtn.addEventListener('click', () => {
-    const text = textInput.value.trim();
-    if (!text) {
-        showStatus('텍스트를 입력해주세요.', 'error');
+function startReading(text, lang, rate, fromIndex = 0) {
+    if (!('speechSynthesis' in window)) {
+        showStatus('이 브라우저는 음성 합성을 지원하지 않습니다.', 'error');
         return;
     }
 
-    currentPosition = 0;
-    speakText(text, voiceLang.value, parseFloat(speedRate.value), 0);
+    currentFullText = text;
+    currentSentences = splitIntoChunks(text);
+    isReading = true;
+
+    readBtn.style.display = 'none';
+    resumeBtn.style.display = 'none';
+    restartBtn.style.display = 'none';
+    stopBtn.style.display = 'flex';
+    showStatus(`읽는 중... (${fromIndex + 1}/${currentSentences.length})`, 'info');
+
+    speakFromIndex(fromIndex);
+}
+
+readBtn.addEventListener('click', () => {
+    let text = textInput.value.trim();
+    
+    // Check if there's selected text
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+    
+    if (selectedText && textInput.contains(selection.anchorNode)) {
+        text = selectedText;
+        showStatus('선택한 부분을 읽습니다.', 'info');
+    }
+    
+    if (!text) {
+        showStatus('텍스트를 입력하거나 선택해주세요.', 'error');
+        return;
+    }
+
+    startReading(text, voiceLang.value, parseFloat(speedRate.value), 0);
     // Save to history
     saveHistory('read', text, null, voiceLang.value);
 });
 
 resumeBtn.addEventListener('click', () => {
-    if (currentText) {
-        speakText(currentText, voiceLang.value, parseFloat(speedRate.value), currentPosition);
+    if (currentFullText && currentSentences.length > 0) {
+        isReading = true;
+        readBtn.style.display = 'none';
+        resumeBtn.style.display = 'none';
+        restartBtn.style.display = 'none';
+        stopBtn.style.display = 'flex';
+        showStatus(`이어서 읽기... (${currentSentenceIndex + 1}/${currentSentences.length})`, 'info');
+        speakFromIndex(currentSentenceIndex);
     }
 });
 
 restartBtn.addEventListener('click', () => {
-    if (currentText) {
-        currentPosition = 0;
-        speakText(currentText, voiceLang.value, parseFloat(speedRate.value), 0);
+    if (currentFullText) {
+        startReading(currentFullText, voiceLang.value, parseFloat(speedRate.value), 0);
     }
 });
 
 stopBtn.addEventListener('click', () => {
     window.speechSynthesis.cancel();
-    isPaused = true;
+    isReading = false;
     readBtn.style.display = 'none';
     resumeBtn.style.display = 'flex';
     restartBtn.style.display = 'flex';
     stopBtn.style.display = 'none';
-    showStatus('정지되었습니다. "이어서 읽기" 또는 "처음부터"를 선택하세요.', 'info');
+    showStatus(`정지되었습니다. (${currentSentenceIndex + 1}/${currentSentences.length} 위치)`, 'info');
 });
 
 // Tab 2: Translate
@@ -295,66 +326,64 @@ const trTargetLang = document.getElementById('trTargetLang');
 const trOutput = document.getElementById('trOutput');
 const trStatus = document.getElementById('trStatus');
 
-let trCurrentText = '';
-let trCurrentPosition = 0;
+let trCurrentFullText = '';
+let trCurrentSentences = [];
+let trCurrentSentenceIndex = 0;
+let trIsReading = false;
 
-function speakTranslatedText(text, lang, rate, fromPosition = 0) {
+function trSpeakFromIndex(index) {
+    if (index >= trCurrentSentences.length) {
+        trBtn.style.display = 'flex';
+        trResumeBtn.style.display = 'none';
+        trRestartBtn.style.display = 'none';
+        trStopBtn.style.display = 'none';
+        trIsReading = false;
+        trCurrentSentenceIndex = 0;
+        showTrStatus('읽기 완료!', 'success');
+        return;
+    }
+
+    trCurrentSentenceIndex = index;
+    const chunk = trCurrentSentences[index];
+
+    window.speechSynthesis.cancel();
+    currentUtterance = new SpeechSynthesisUtterance(chunk);
+    currentUtterance.lang = trTargetLang.value;
+    currentUtterance.rate = parseFloat(trSpeedRate.value);
+
+    currentUtterance.onend = () => {
+        if (trIsReading) {
+            trSpeakFromIndex(index + 1);
+        }
+    };
+
+    currentUtterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        if (trIsReading && e.error !== 'interrupted') {
+            trSpeakFromIndex(index + 1);
+        }
+    };
+
+    window.speechSynthesis.speak(currentUtterance);
+}
+
+function trStartReading(text, lang, rate, fromIndex = 0) {
     if (!('speechSynthesis' in window)) {
         showTrStatus('이 브라우저는 음성 합성을 지원하지 않습니다.', 'error');
         return;
     }
 
-    window.speechSynthesis.cancel();
+    trCurrentFullText = text;
+    trCurrentSentences = splitIntoChunks(text);
+    trIsReading = true;
 
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-    const textToSpeak = sentences.slice(fromPosition).join(' ');
+    trBtn.style.display = 'none';
+    trResumeBtn.style.display = 'none';
+    trRestartBtn.style.display = 'none';
+    trStopBtn.style.display = 'flex';
+    showTrStatus(`읽는 중... (${fromIndex + 1}/${trCurrentSentences.length})`, 'info');
 
-    if (!textToSpeak.trim()) {
-        showTrStatus('읽을 내용이 없습니다.', 'error');
-        return;
-    }
-
-    trCurrentText = text;
-    trCurrentPosition = fromPosition;
-
-    currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
-    currentUtterance.lang = lang;
-    currentUtterance.rate = rate;
-
-    let sentenceIndex = fromPosition;
-    currentUtterance.onboundary = (event) => {
-        if (event.name === 'sentence') {
-            sentenceIndex++;
-            trCurrentPosition = sentenceIndex;
-        }
-    };
-
-    currentUtterance.onstart = () => {
-        trBtn.style.display = 'none';
-        trResumeBtn.style.display = 'none';
-        trRestartBtn.style.display = 'none';
-        trStopBtn.style.display = 'flex';
-        showTrStatus('읽는 중...', 'info');
-    };
-
-    currentUtterance.onend = () => {
-        trBtn.style.display = 'flex';
-        trResumeBtn.style.display = 'none';
-        trRestartBtn.style.display = 'none';
-        trStopBtn.style.display = 'none';
-        trCurrentPosition = 0;
-        showTrStatus('완료!', 'success');
-    };
-
-    currentUtterance.onerror = (e) => {
-        trBtn.style.display = 'flex';
-        trResumeBtn.style.display = 'none';
-        trRestartBtn.style.display = 'none';
-        trStopBtn.style.display = 'none';
-        showTrStatus('음성 오류: ' + e.error, 'error');
-    };
-
-    window.speechSynthesis.speak(currentUtterance);
+    trSpeakFromIndex(fromIndex);
 }
 
 trBtn.addEventListener('click', async () => {
@@ -370,14 +399,12 @@ trBtn.addEventListener('click', async () => {
     try {
         const translated = await translateText(text, trSourceLang.value, trTargetLang.value);
         trOutput.innerHTML = makeClickableWords(translated);
-        showTrStatus('번역 완료! 읽는 중...', 'info');
         
         // Save to history
         saveHistory('translate-read', text, translated, trTargetLang.value);
 
         // Read the translated text
-        trCurrentPosition = 0;
-        speakTranslatedText(translated, trTargetLang.value, parseFloat(trSpeedRate.value), 0);
+        trStartReading(translated, trTargetLang.value, parseFloat(trSpeedRate.value), 0);
         trBtn.disabled = false;
     } catch (error) {
         showTrStatus('번역 실패: ' + error.message, 'error');
@@ -386,25 +413,31 @@ trBtn.addEventListener('click', async () => {
 });
 
 trResumeBtn.addEventListener('click', () => {
-    if (trCurrentText) {
-        speakTranslatedText(trCurrentText, trTargetLang.value, parseFloat(trSpeedRate.value), trCurrentPosition);
+    if (trCurrentFullText && trCurrentSentences.length > 0) {
+        trIsReading = true;
+        trBtn.style.display = 'none';
+        trResumeBtn.style.display = 'none';
+        trRestartBtn.style.display = 'none';
+        trStopBtn.style.display = 'flex';
+        showTrStatus(`이어서 읽기... (${trCurrentSentenceIndex + 1}/${trCurrentSentences.length})`, 'info');
+        trSpeakFromIndex(trCurrentSentenceIndex);
     }
 });
 
 trRestartBtn.addEventListener('click', () => {
-    if (trCurrentText) {
-        trCurrentPosition = 0;
-        speakTranslatedText(trCurrentText, trTargetLang.value, parseFloat(trSpeedRate.value), 0);
+    if (trCurrentFullText) {
+        trStartReading(trCurrentFullText, trTargetLang.value, parseFloat(trSpeedRate.value), 0);
     }
 });
 
 trStopBtn.addEventListener('click', () => {
     window.speechSynthesis.cancel();
+    trIsReading = false;
     trBtn.style.display = 'none';
     trResumeBtn.style.display = 'flex';
     trRestartBtn.style.display = 'flex';
     trStopBtn.style.display = 'none';
-    showTrStatus('정지되었습니다. "이어서 읽기" 또는 "처음부터"를 선택하세요.', 'info');
+    showTrStatus(`정지되었습니다. (${trCurrentSentenceIndex + 1}/${trCurrentSentences.length} 위치)`, 'info');
 });
 
 // Translation API (using MyMemory free API)

@@ -91,11 +91,18 @@
             resize: vertical;
             margin-bottom: 15px;
             transition: border-color 0.3s;
+            user-select: text;
+            -webkit-user-select: text;
         }
 
         textarea:focus {
             outline: none;
             border-color: #667eea;
+        }
+
+        textarea::selection {
+            background: #667eea;
+            color: white;
         }
 
         .controls {
