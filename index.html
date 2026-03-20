@@ -394,7 +394,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎙️ TTS Translator</h1>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px;">
+            <h1>🎙️ TTS Translator</h1>
+            <span id="versionBadge" style="background:#eef3ff; color:#4a67c2; border:1px solid #b7c7ff; border-radius:999px; padding:6px 10px; font-size:12px; font-weight:700;">v4.3</span>
+        </div>
         <p class="subtitle">텍스트 읽기, 번역, 단어 사전</p>
 
         <div class="tabs">
@@ -426,15 +429,8 @@
                     <option value="de-DE">Deutsch</option>
                 </select>
                 <select id="voiceSelect" style="flex: 1.5;">
-                    <option value="">음성 선택...</option>
+                    <option value="">음성 선택 (선택 시 바로 테스트)</option>
                 </select>
-                <button id="testVoiceBtn" style="background: #ffc107; color: #333;">
-                    <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
-                    </svg>
-                    음성 테스트
-                </button>
             </div>
             
             <div class="controls">
@@ -597,7 +593,7 @@
 
     <script>
         // Version check and auto-reload
-        const APP_VERSION = '4.1';
+        const APP_VERSION = '4.3';
         const storedVersion = localStorage.getItem('appVersion');
         
         if (storedVersion && storedVersion !== APP_VERSION) {
@@ -611,12 +607,6 @@
             const badge = document.getElementById('versionBadge');
             if (badge) badge.textContent = APP_VERSION;
         });
-    </script>
-    <script src="app.js"></script>
-</body>
-</html>
-     localStorage.setItem('appVersion', APP_VERSION);
-        }
     </script>
     <script src="app.js"></script>
 </body>
