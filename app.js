@@ -155,6 +155,7 @@ const stopBtn = document.getElementById('stopBtn');
 const textInput = document.getElementById('textInput');
 const voiceLang = document.getElementById('voiceLang');
 const voiceSelect = document.getElementById('voiceSelect');
+const refreshVoicesBtn = document.getElementById('refreshVoicesBtn');
 const status = document.getElementById('status');
 
 // Load available voices
