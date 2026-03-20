@@ -146,6 +146,7 @@ trSpeedRate.addEventListener('input', (e) => {
 
 // Tab 1: Read original text
 const readBtn = document.getElementById('readBtn');
+const readSelectionBtn = document.getElementById('readSelectionBtn');
 const resumeBtn = document.getElementById('resumeBtn');
 const restartBtn = document.getElementById('restartBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -173,6 +174,7 @@ function speakText(text, startFrom = 0) {
     
     currentUtterance.onstart = () => {
         readBtn.style.display = 'none';
+        readSelectionBtn.style.display = 'none';
         resumeBtn.style.display = 'none';
         restartBtn.style.display = 'none';
         stopBtn.style.display = 'flex';
@@ -183,6 +185,7 @@ function speakText(text, startFrom = 0) {
     currentUtterance.onend = () => {
         if (!isPaused) {
             readBtn.style.display = 'flex';
+            readSelectionBtn.style.display = 'flex';
             resumeBtn.style.display = 'none';
             restartBtn.style.display = 'none';
             stopBtn.style.display = 'none';
@@ -200,6 +203,7 @@ function speakText(text, startFrom = 0) {
     currentUtterance.onerror = (e) => {
         console.error('TTS error:', e);
         readBtn.style.display = 'flex';
+        readSelectionBtn.style.display = 'flex';
         resumeBtn.style.display = 'none';
         restartBtn.style.display = 'none';
         stopBtn.style.display = 'none';
@@ -209,22 +213,12 @@ function speakText(text, startFrom = 0) {
     synth.speak(currentUtterance);
 }
 
+// 전체 읽기
 readBtn.addEventListener('click', () => {
-    let text = textInput.value.trim();
-    
-    // Check for selected text
-    const selection = textInput.value.substring(
-        textInput.selectionStart,
-        textInput.selectionEnd
-    );
-    
-    if (selection) {
-        text = selection;
-        showStatus('선택한 부분을 읽습니다.', 'info');
-    }
+    const text = textInput.value.trim();
     
     if (!text) {
-        showStatus('텍스트를 입력하거나 선택해주세요.', 'error');
+        showStatus('텍스트를 입력해주세요.', 'error');
         return;
     }
     
@@ -232,6 +226,30 @@ readBtn.addEventListener('click', () => {
     currentCharIndex = 0;
     speakText(text, 0);
     saveHistory('read', text, null, voiceLang.value);
+});
+
+// 선택 영역 읽기
+readSelectionBtn.addEventListener('click', () => {
+    const selectionStart = textInput.selectionStart;
+    const selectionEnd = textInput.selectionEnd;
+    
+    if (selectionStart === selectionEnd) {
+        showStatus('텍스트를 먼저 선택해주세요.', 'error');
+        return;
+    }
+    
+    const selectedText = textInput.value.substring(selectionStart, selectionEnd).trim();
+    
+    if (!selectedText) {
+        showStatus('선택한 텍스트가 없습니다.', 'error');
+        return;
+    }
+    
+    fullText = selectedText;
+    currentCharIndex = 0;
+    showStatus('선택한 부분을 읽습니다.', 'info');
+    speakText(selectedText, 0);
+    saveHistory('read', selectedText, null, voiceLang.value);
 });
 
 resumeBtn.addEventListener('click', () => {
@@ -251,6 +269,7 @@ stopBtn.addEventListener('click', () => {
     isPaused = true;
     synth.cancel();
     readBtn.style.display = 'none';
+    readSelectionBtn.style.display = 'none';
     resumeBtn.style.display = 'flex';
     restartBtn.style.display = 'flex';
     stopBtn.style.display = 'none';
