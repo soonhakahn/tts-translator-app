@@ -152,6 +152,7 @@ const readSelectionBtn = document.getElementById('readSelectionBtn');
 const resumeBtn = document.getElementById('resumeBtn');
 const restartBtn = document.getElementById('restartBtn');
 const stopBtn = document.getElementById('stopBtn');
+const testVoiceBtn = document.getElementById('testVoiceBtn');
 const textInput = document.getElementById('textInput');
 const voiceLang = document.getElementById('voiceLang');
 const voiceSelect = document.getElementById('voiceSelect');
@@ -203,10 +204,69 @@ voiceSelect.addEventListener('change', (e) => {
     const index = e.target.value;
     if (index === '') {
         selectedVoice = null;
+        testVoiceBtn.disabled = true;
     } else {
         selectedVoice = voices[parseInt(index)];
+        testVoiceBtn.disabled = false;
     }
 });
+
+// Test voice button
+testVoiceBtn.addEventListener('click', () => {
+    const testMessages = {
+        'ko': '안녕하세요. 이 목소리로 읽어드립니다.',
+        'en': 'Hello. This is how I sound.',
+        'ja': 'こんにちは。これが私の声です。',
+        'zh': '你好。这是我的声音。',
+        'es': 'Hola. Así es como sueno.',
+        'fr': 'Bonjour. Voici ma voix.',
+        'de': 'Hallo. So klinge ich.'
+    };
+    
+    const lang = voiceLang.value.split('-')[0];
+    const testText = testMessages[lang] || testMessages['en'];
+    
+    synth.cancel();
+    const testUtterance = new SpeechSynthesisUtterance(testText);
+    testUtterance.lang = voiceLang.value;
+    testUtterance.rate = parseFloat(speedRate.value);
+    
+    if (selectedVoice) {
+        testUtterance.voice = selectedVoice;
+    }
+    
+    testUtterance.onstart = () => {
+        testVoiceBtn.disabled = true;
+        testVoiceBtn.textContent = '테스트 중...';
+    };
+    
+    testUtterance.onend = () => {
+        testVoiceBtn.disabled = false;
+        testVoiceBtn.innerHTML = `
+            <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+            </svg>
+            음성 테스트
+        `;
+    };
+    
+    testUtterance.onerror = () => {
+        testVoiceBtn.disabled = false;
+        testVoiceBtn.innerHTML = `
+            <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+            </svg>
+            음성 테스트
+        `;
+    };
+    
+    synth.speak(testUtterance);
+});
+
+// Initially disable test button
+testVoiceBtn.disabled = true;
 
 // Load voices on page load and when they change
 if (synth) {
