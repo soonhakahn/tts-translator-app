@@ -501,11 +501,14 @@ function showTrStatus(message, type) {
     trStatus.className = 'status ' + type;
 }
 
-// PWA Service Worker
+// PWA Service Worker - Temporarily disabled for cache issues
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-        .then(reg => console.log('Service Worker registered'))
-        .catch(err => console.log('Service Worker registration failed'));
+    // Unregister existing service workers
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+            registration.unregister();
+        }
+    });
 }
 
 // iOS standalone mode
