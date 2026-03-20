@@ -425,6 +425,9 @@
                     <option value="fr-FR">Français</option>
                     <option value="de-DE">Deutsch</option>
                 </select>
+                <select id="voiceSelect" style="flex: 1.5;">
+                    <option value="">음성 선택...</option>
+                </select>
             </div>
             
             <div class="controls">
@@ -582,7 +585,7 @@
 
     <script>
         // Version check and auto-reload
-        const APP_VERSION = '2.0';
+        const APP_VERSION = '3.0';
         const storedVersion = localStorage.getItem('appVersion');
         
         if (storedVersion && storedVersion !== APP_VERSION) {

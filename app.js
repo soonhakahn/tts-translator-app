@@ -129,6 +129,8 @@ let currentUtterance = null;
 let fullText = '';
 let currentCharIndex = 0;
 let isPaused = false;
+let voices = [];
+let selectedVoice = null;
 
 // Speed control
 const speedRate = document.getElementById('speedRate');
@@ -152,7 +154,67 @@ const restartBtn = document.getElementById('restartBtn');
 const stopBtn = document.getElementById('stopBtn');
 const textInput = document.getElementById('textInput');
 const voiceLang = document.getElementById('voiceLang');
+const voiceSelect = document.getElementById('voiceSelect');
 const status = document.getElementById('status');
+
+// Load available voices
+function loadVoices() {
+    voices = synth.getVoices();
+    populateVoiceList();
+}
+
+function populateVoiceList() {
+    voiceSelect.innerHTML = '<option value="">기본 음성</option>';
+    
+    const lang = voiceLang.value;
+    const filteredVoices = voices.filter(voice => voice.lang.startsWith(lang.split('-')[0]));
+    
+    filteredVoices.forEach((voice, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        if (voice.default) {
+            option.textContent += ' - 기본';
+        }
+        voiceSelect.appendChild(option);
+    });
+    
+    // Also add all voices in a separate group
+    if (filteredVoices.length > 0) {
+        const separator = document.createElement('option');
+        separator.disabled = true;
+        separator.textContent = '─────────────';
+        voiceSelect.appendChild(separator);
+    }
+    
+    voices.forEach((voice, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        voiceSelect.appendChild(option);
+    });
+}
+
+// Update voice list when language changes
+voiceLang.addEventListener('change', populateVoiceList);
+
+// Update selected voice
+voiceSelect.addEventListener('change', (e) => {
+    const index = e.target.value;
+    if (index === '') {
+        selectedVoice = null;
+    } else {
+        selectedVoice = voices[parseInt(index)];
+    }
+});
+
+// Load voices on page load and when they change
+if (synth) {
+    loadVoices();
+    if (synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = loadVoices;
+    }
+}
 
 function speakText(text, startFrom = 0) {
     if (!synth) {
@@ -171,6 +233,11 @@ function speakText(text, startFrom = 0) {
     currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
     currentUtterance.lang = voiceLang.value;
     currentUtterance.rate = parseFloat(speedRate.value);
+    
+    // Use selected voice if available
+    if (selectedVoice) {
+        currentUtterance.voice = selectedVoice;
+    }
     
     currentUtterance.onstart = () => {
         readBtn.style.display = 'none';
@@ -338,6 +405,11 @@ function speakTranslatedText(text, startFrom = 0) {
     currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
     currentUtterance.lang = trTargetLang.value;
     currentUtterance.rate = parseFloat(trSpeedRate.value);
+    
+    // Use selected voice if available and matches language
+    if (selectedVoice && selectedVoice.lang.startsWith(trTargetLang.value.split('-')[0])) {
+        currentUtterance.voice = selectedVoice;
+    }
     
     currentUtterance.onstart = () => {
         trBtn.style.display = 'none';
