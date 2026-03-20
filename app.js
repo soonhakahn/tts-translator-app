@@ -408,10 +408,14 @@ const translateBtn = document.getElementById('translateBtn');
 const translateInput = document.getElementById('translateInput');
 const sourceLang = document.getElementById('sourceLang');
 const targetLang = document.getElementById('targetLang');
+const swapLangBtn = document.getElementById('swapLangBtn');
+const pasteTranslateBtn = document.getElementById('pasteTranslateBtn');
+const copyTranslateBtn = document.getElementById('copyTranslateBtn');
+const clearTranslateBtn = document.getElementById('clearTranslateBtn');
 const translateOutput = document.getElementById('translateOutput');
 const translateStatus = document.getElementById('translateStatus');
 
-translateBtn.addEventListener('click', async () => {
+async function runTranslate() {
     const text = translateInput.value.trim();
     if (!text) {
         showTranslateStatus('텍스트를 입력해주세요.', 'error');
@@ -430,6 +434,48 @@ translateBtn.addEventListener('click', async () => {
         showTranslateStatus('번역 실패: ' + error.message, 'error');
     } finally {
         translateBtn.disabled = false;
+    }
+}
+
+translateBtn.addEventListener('click', runTranslate);
+
+swapLangBtn.addEventListener('click', () => {
+    if (sourceLang.value === 'auto') return;
+    const temp = sourceLang.value;
+    sourceLang.value = targetLang.value;
+    targetLang.value = temp;
+});
+
+pasteTranslateBtn.addEventListener('click', async () => {
+    try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+            translateInput.value = text;
+            showTranslateStatus('클립보드 내용을 붙여넣었습니다.', 'success');
+        }
+    } catch (e) {
+        showTranslateStatus('클립보드 읽기에 실패했습니다.', 'error');
+    }
+});
+
+copyTranslateBtn.addEventListener('click', () => {
+    const text = translateOutput.textContent.trim();
+    if (!text) {
+        showTranslateStatus('복사할 번역 결과가 없습니다.', 'error');
+        return;
+    }
+    copyToClipboard(text);
+});
+
+clearTranslateBtn.addEventListener('click', () => {
+    translateInput.value = '';
+    translateOutput.innerHTML = '';
+    showTranslateStatus('입력과 결과를 지웠습니다.', 'success');
+});
+
+translateInput.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        runTranslate();
     }
 });
 
